@@ -519,7 +519,11 @@ def main() -> int:
 
     # run it
     runner = unittest.TextTestRunner(verbosity=args.verbose, failfast=args.failfast)
-    result = runner.run(test_suite)
+    #result = runner.run(test_suite)
+    from concurrencytest import ConcurrentTestSuite, fork_for_tests
+    concurrent_suite = ConcurrentTestSuite(test_suite, fork_for_tests(8))
+    result = runner.run(concurrent_suite)
+
     if result.wasSuccessful():
         return 0
 

@@ -5,7 +5,10 @@ from __future__ import annotations
 import difflib
 import json
 import platform
+import shutil
 import subprocess
+import tempfile
+
 import sys
 import unittest
 from enum import Flag, auto, unique
@@ -239,6 +242,7 @@ class TestChapter(unittest.TestCase):
         )
 
         for junk in garbage_files:
+            print(junk)
             junk.unlink()
 
     def invoke_compiler(
@@ -577,7 +581,14 @@ def make_invalid_test(program: Path) -> Callable[[TestChapter], None]:
     """Generate a test method for an invalid source program"""
 
     def test_invalid(self: TestChapter) -> None:
-        self.compile_failure(program)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_dir_path = Path(temp_dir)
+            temp_program = temp_dir_path / program.name
+            shutil.copy2(program, temp_program)
+            try:
+                self.compile_failure(temp_program)
+            finally:
+                pass
 
     return test_invalid
 
@@ -589,7 +600,14 @@ def make_test_valid(program: Path) -> Callable[[TestChapter], None]:
     the whole compiler"""
 
     def test_valid(self: TestChapter) -> None:
-        self.compile_success(program)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_dir_path = Path(temp_dir)
+            temp_program = temp_dir_path / program.name
+            shutil.copy2(program, temp_program)
+            try:
+                self.compile_success(temp_program)
+            finally:
+                pass
 
     return test_valid
 
@@ -600,7 +618,14 @@ def make_test_run(program: Path) -> Callable[[TestChapter], None]:
     """
 
     def test_run(self: TestChapter) -> None:
-        self.compile_and_run(program)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_dir_path = Path(temp_dir)
+            temp_program = temp_dir_path / program.name
+            shutil.copy2(program, temp_program)
+            try:
+                self.compile_and_run(temp_program)
+            finally:
+                pass
 
     return test_run
 
@@ -609,7 +634,14 @@ def make_test_client(program: Path) -> Callable[[TestChapter], None]:
     """Generate one test method for client in multi-file program"""
 
     def test_client(self: TestChapter) -> None:
-        self.compile_client_and_run(program)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_dir_path = Path(temp_dir)
+            temp_program = temp_dir_path / program.name
+            shutil.copy2(program, temp_program)
+            try:
+                self.compile_client_and_run(temp_program)
+            finally:
+                pass
 
     return test_client
 
@@ -618,7 +650,14 @@ def make_test_lib(program: Path) -> Callable[[TestChapter], None]:
     """Generate one test method for library in multi-file program"""
 
     def test_lib(self: TestChapter) -> None:
-        self.compile_lib_and_run(program)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_dir_path = Path(temp_dir)
+            temp_program = temp_dir_path / program.name
+            shutil.copy2(program, temp_program)
+            try:
+                self.compile_lib_and_run(temp_program)
+            finally:
+                pass
 
     return test_lib
 
