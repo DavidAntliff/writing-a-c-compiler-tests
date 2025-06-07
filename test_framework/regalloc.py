@@ -494,7 +494,7 @@ def configure_tests(
     all_tests = [p for subdir in subdirs for p in (TEST_DIR / subdir).rglob("*.c")]
 
     for program in all_tests:
-        if basic.excluded_extra_credit(program, extra_credit_flags):
+        if basic.excluded_extra_credit(program, extra_credit_flags, TEST_DIR):
             continue
         key = program.relative_to(TEST_DIR).with_suffix("")
         name = f"test_{key}"

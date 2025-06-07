@@ -60,23 +60,23 @@ def get_platform_suffix() -> str:
     return MAC_SUFFIX if IS_OSX else LINUX_SUFFIX
 
 
-def get_props_key(source_file: Path) -> str:
+def get_props_key(source_file: Path, test_dir: Path) -> str:
     """key to use in EXPECTED_RESULTS, REQUIRES_MATHLIB, EXTRA_CREDIT_PROGRAMS
     If this ends with _client.c, use corresponding lib as props key
     """
     if source_file.stem.endswith("_client"):
         source_file = replace_stem(source_file, source_file.stem[: -len("_client")])
-    return str(source_file.relative_to(TEST_DIR))
+    return str(source_file.relative_to(test_dir))
 
 
-def needs_mathlib(prog: Path) -> bool:
-    key = get_props_key(prog)
+def needs_mathlib(prog: Path, test_dir: Path) -> bool:
+    key = get_props_key(prog, test_dir)
     return key in REQUIRES_MATHLIB and not IS_OSX
 
 
-def get_libs(prog: Path) -> List[Path]:
+def get_libs(prog: Path, test_dir: Path) -> List[Path]:
     """Get extra libraries this test program depends on (aside from lib/client pairs)"""
-    props_key = get_props_key(prog)
+    props_key = get_props_key(prog, test_dir)
     libs = []
     if props_key in ASSEMBLY_DEPENDENCIES:
         for asm_dep in ASSEMBLY_DEPENDENCIES[props_key]:
@@ -293,7 +293,7 @@ class TestChapter(unittest.TestCase):
         self.assertFalse(executable_file.exists())
 
     def validate_runs(
-        self, source_file: Path, actual: subprocess.CompletedProcess[str]
+        self, source_file: Path, actual: subprocess.CompletedProcess[str], test_dir: Path
     ) -> None:
         """Validate that the running compiled executable gave the expected result.
 
@@ -303,7 +303,7 @@ class TestChapter(unittest.TestCase):
             source_file: Absolute path of the source file for a test program
             actual: result of compiling this source file with self.cc and running it
         """
-        key = get_props_key(source_file)
+        key = get_props_key(source_file, test_dir)
         expected = EXPECTED_RESULTS[key]
         expected_retcode = expected["return_code"]
         expected_stdout = expected.get("stdout", "")
@@ -369,17 +369,17 @@ class TestChapter(unittest.TestCase):
         # make sure we didn't emit executable or assembly code
         self.validate_no_output(source_file)
 
-    def compile_and_run(self, source_file: Path) -> None:
+    def compile_and_run(self, source_file: Path, test_dir: Path) -> None:
         """Compile a valid test program, run it, and validate the results"""
 
         # if this depends on extra libraries, call library_test_helper instead
-        extra_libs = get_libs(source_file)
+        extra_libs = get_libs(source_file, test_dir)
         if extra_libs:
-            self.library_test_helper(source_file, extra_libs)
+            self.library_test_helper(source_file, extra_libs, test_dir)
             return
 
         # include -lm for standard library test on linux
-        if needs_mathlib(source_file):
+        if needs_mathlib(source_file, test_dir):
             cc_opt = "-lm"
         else:
             cc_opt = None
@@ -403,10 +403,10 @@ class TestChapter(unittest.TestCase):
             [exe], check=False, capture_output=True, text=True, timeout=10.0
         )
 
-        self.validate_runs(source_file, result)
+        self.validate_runs(source_file, result, test_dir)
 
     def library_test_helper(
-        self, file_under_test: Path, other_files: List[Path]
+        self, file_under_test: Path, other_files: List[Path], test_dir: Path
     ) -> None:
         """Compile one file in a multi-file program and validate the results.
 
@@ -444,7 +444,7 @@ class TestChapter(unittest.TestCase):
         # and run resulting executable
         source_files = [compiled_file_under_test] + other_files
         options = []
-        if needs_mathlib(file_under_test) or any(needs_mathlib(f) for f in other_files):
+        if needs_mathlib(file_under_test, test_dir) or any(needs_mathlib(f, test_dir) for f in other_files):
             options.append("-lm")
         result = gcc_compile_and_run(source_files, options)
 
@@ -549,7 +549,7 @@ class ExtraCredit(Flag):
     ALL = BITWISE | COMPOUND | INCREMENT | GOTO | SWITCH | NAN | UNION
 
 
-def excluded_extra_credit(source_prog: Path, extra_credit_flags: ExtraCredit) -> bool:
+def excluded_extra_credit(source_prog: Path, extra_credit_flags: ExtraCredit, test_dir: Path) -> bool:
     """Based on our current extra credit settings, should we include this test program?
 
     Args:
@@ -566,7 +566,7 @@ def excluded_extra_credit(source_prog: Path, extra_credit_flags: ExtraCredit) ->
 
     # convert list of strings representing required extra credit features for this program
     # to list of ExtraCredit flags
-    key = get_props_key(source_prog)
+    key = get_props_key(source_prog, test_dir)
 
     features_required = (
         ExtraCredit[str.upper(feature)] for feature in EXTRA_CREDIT_PROGRAMS[key]
@@ -581,9 +581,11 @@ def make_invalid_test(program: Path) -> Callable[[TestChapter], None]:
     """Generate a test method for an invalid source program"""
 
     def test_invalid(self: TestChapter) -> None:
+        program_rel = program.relative_to(TEST_DIR)
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_dir_path = Path(temp_dir)
-            temp_program = temp_dir_path / program.name
+            temp_program = temp_dir_path / program_rel
+            temp_program.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(program, temp_program)
             try:
                 self.compile_failure(temp_program)
@@ -600,9 +602,11 @@ def make_test_valid(program: Path) -> Callable[[TestChapter], None]:
     the whole compiler"""
 
     def test_valid(self: TestChapter) -> None:
+        program_rel = program.relative_to(TEST_DIR)
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_dir_path = Path(temp_dir)
-            temp_program = temp_dir_path / program.name
+            temp_program = temp_dir_path / program_rel
+            temp_program.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(program, temp_program)
             try:
                 self.compile_success(temp_program)
@@ -618,12 +622,14 @@ def make_test_run(program: Path) -> Callable[[TestChapter], None]:
     """
 
     def test_run(self: TestChapter) -> None:
+        program_rel = program.relative_to(TEST_DIR)
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_dir_path = Path(temp_dir)
-            temp_program = temp_dir_path / program.name
+            temp_program = temp_dir_path / program_rel
+            temp_program.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(program, temp_program)
             try:
-                self.compile_and_run(temp_program)
+                self.compile_and_run(temp_program, temp_dir_path)
             finally:
                 pass
 
@@ -685,7 +691,7 @@ def make_invalid_tests(
     for invalid_subdir in DIRECTORIES_BY_STAGE[stage]["invalid"]:
         invalid_test_dir = test_dir / invalid_subdir
         for program in invalid_test_dir.rglob("*.c"):
-            if excluded_extra_credit(program, extra_credit_flags):
+            if excluded_extra_credit(program, extra_credit_flags, TEST_DIR):
                 continue
 
             # derive name of test method from name of source file
@@ -725,7 +731,7 @@ def make_valid_tests(
     for valid_subdir in DIRECTORIES_BY_STAGE[stage]["valid"]:
         valid_testdir = test_dir / valid_subdir
         for program in valid_testdir.rglob("*.c"):
-            if excluded_extra_credit(program, extra_credit_flags):
+            if excluded_extra_credit(program, extra_credit_flags, TEST_DIR):
                 # this requires extra credit features that aren't enabled
                 continue
 

@@ -65,7 +65,7 @@ class SanitizerTest(unittest.TestCase):
     def compile_and_run_sanitized(self, source_file: Path) -> None:
         """Make sure aggressive compiler warnings and UBSan don't complain about this program"""
 
-        key = basic.get_props_key(source_file)
+        key = basic.get_props_key(source_file, basic.TEST_DIR)
 
         # TODO run other sanitizers too?
         subproc_args = [

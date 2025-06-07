@@ -64,7 +64,7 @@ def configure_tests(
             tests = itertools.chain(tests, partii_tests)
 
     for program in tests:
-        if basic.excluded_extra_credit(program, extra_credit_flags):
+        if basic.excluded_extra_credit(program, extra_credit_flags, TEST_DIR):
             continue
         key = program.relative_to(cls.test_dir).with_suffix("")
         name = f"test_{key}"

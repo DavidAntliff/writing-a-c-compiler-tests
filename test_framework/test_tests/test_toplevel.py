@@ -65,7 +65,7 @@ def get_expected_test_count(
         """Include a test file if it's not an extra-credit test or in any of excluded_dirs"""
         if any(excluded in f.parts for excluded in excluded_dirs):
             return False
-        return not excluded_extra_credit(f, ExtraCredit.NONE)
+        return not excluded_extra_credit(f, ExtraCredit.NONE, TEST_DIR)
 
     count = 0
     for i in chapters:
