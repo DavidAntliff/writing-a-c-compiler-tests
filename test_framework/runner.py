@@ -518,11 +518,14 @@ def main() -> int:
     unittest.installHandler()
 
     # run it
+    concurrent = True
     runner = unittest.TextTestRunner(verbosity=args.verbose, failfast=args.failfast)
-    #result = runner.run(test_suite)
-    from concurrencytest import ConcurrentTestSuite, fork_for_tests
-    concurrent_suite = ConcurrentTestSuite(test_suite, fork_for_tests(16))
-    result = runner.run(concurrent_suite)
+    if concurrent:
+        from concurrencytest import ConcurrentTestSuite, fork_for_tests
+        concurrent_suite = ConcurrentTestSuite(test_suite, fork_for_tests(16))
+        result = runner.run(concurrent_suite)
+    else:
+        result = runner.run(test_suite)
 
     if result.wasSuccessful():
         return 0

@@ -302,6 +302,7 @@ class TestChapter(unittest.TestCase):
         Args:
             source_file: Absolute path of the source file for a test program
             actual: result of compiling this source file with self.cc and running it
+            test_dir: Absolute path to the test directory
         """
         key = get_props_key(source_file, test_dir)
         expected = EXPECTED_RESULTS[key]
@@ -375,7 +376,12 @@ class TestChapter(unittest.TestCase):
         # if this depends on extra libraries, call library_test_helper instead
         extra_libs = get_libs(source_file, test_dir)
         if extra_libs:
-            self.library_test_helper(source_file, extra_libs, test_dir)
+            new_libs = []
+            for lib in extra_libs:
+                new_lib = test_dir / lib.name
+                shutil.copy2(lib, new_lib)
+                new_libs.append(new_lib)
+            self.library_test_helper(source_file, new_libs, test_dir)
             return
 
         # include -lm for standard library test on linux
@@ -419,6 +425,7 @@ class TestChapter(unittest.TestCase):
                 (in optimization tests) an assembly file that we've already
                 compiled with self.cc and inspected
             other_files: Absolute paths to other files in the multi-file program
+            test_dir: Absolute path to the test directory
         """
 
         # If file_under_test is a C program, compile it with self.cc;
@@ -449,21 +456,21 @@ class TestChapter(unittest.TestCase):
         result = gcc_compile_and_run(source_files, options)
 
         # validate results
-        self.validate_runs(validation_key, result)
+        self.validate_runs(validation_key, result, test_dir)
 
-    def compile_client_and_run(self, client_path: Path) -> None:
+    def compile_client_and_run(self, client_path: Path, test_dir: Path) -> None:
         """Multi-file program test where our compiler compiles the client"""
 
         # <FOO>_client.c should have corresponding library <FOO>.c in the same directory
         lib_path = replace_stem(client_path, client_path.stem[: -len("_client")])
-        self.library_test_helper(client_path, [lib_path])
+        self.library_test_helper(client_path, [lib_path], test_dir)
 
-    def compile_lib_and_run(self, lib_path: Path) -> None:
+    def compile_lib_and_run(self, lib_path: Path, test_dir: Path) -> None:
         """Multi-file program test where our compiler compiles the library"""
 
         # program path <FOO>.c should have corresponding <FOO>_client.c in same directory
         client_path = replace_stem(lib_path, lib_path.stem + "_client")
-        self.library_test_helper(lib_path, [client_path])
+        self.library_test_helper(lib_path, [client_path], test_dir)
 
 
 # Automatically generating test classes + methods
@@ -640,12 +647,18 @@ def make_test_client(program: Path) -> Callable[[TestChapter], None]:
     """Generate one test method for client in multi-file program"""
 
     def test_client(self: TestChapter) -> None:
+        program_rel = program.relative_to(TEST_DIR)
+        lib = replace_stem(program, program.stem[: -len("_client")])
+        lib_rel = lib.relative_to(TEST_DIR)
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_dir_path = Path(temp_dir)
-            temp_program = temp_dir_path / program.name
+            temp_program = temp_dir_path / program_rel
+            temp_program.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(program, temp_program)
+            temp_lib = temp_dir_path / lib_rel
+            shutil.copy2(lib, temp_lib)
             try:
-                self.compile_client_and_run(temp_program)
+                self.compile_client_and_run(temp_program, temp_dir_path)
             finally:
                 pass
 
@@ -656,12 +669,18 @@ def make_test_lib(program: Path) -> Callable[[TestChapter], None]:
     """Generate one test method for library in multi-file program"""
 
     def test_lib(self: TestChapter) -> None:
+        program_rel = program.relative_to(TEST_DIR)
+        client = replace_stem(program, program.stem + "_client")
+        client_rel = client.relative_to(TEST_DIR)
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_dir_path = Path(temp_dir)
-            temp_program = temp_dir_path / program.name
+            temp_program = temp_dir_path / program_rel
+            temp_program.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(program, temp_program)
+            temp_client = temp_dir_path / client_rel
+            shutil.copy2(client, temp_client)
             try:
-                self.compile_lib_and_run(temp_program)
+                self.compile_lib_and_run(temp_program, temp_dir_path)
             finally:
                 pass
 
